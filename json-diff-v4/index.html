@@ -1,0 +1,1624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JSON Toolkit</title>
+  <style>
+    :root {
+      --bg: #f7f8fa;
+      --surface: #ffffff;
+      --text: #1e293b;
+      --text-dim: #64748b;
+      --add: #16a34a;
+      --add-bg: rgba(22, 163, 74, 0.12);
+      --remove: #dc2626;
+      --remove-bg: rgba(220, 38, 38, 0.10);
+      --change: #d97706;
+      --change-bg: rgba(217, 119, 6, 0.10);
+      --accent: #2563eb;
+      --border: #e2e8f0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "SF Mono", "Monaco", "Inconsolata", "Fira Mono", monospace;
+      background: var(--bg); color: var(--text);
+      min-height: 100vh; font-size: 13px;
+    }
+    .app { max-width: 1600px; margin: 0 auto; padding: 1rem; }
+    h1 { font-size: 1.25rem; font-weight: 600; margin: 0 0 1rem 0; color: var(--accent); }
+    .toolbar {
+      display: flex; flex-wrap: wrap; gap: 1rem; align-items: center;
+      margin-bottom: 1rem; padding: 0.75rem;
+      background: var(--surface); border-radius: 8px; border: 1px solid var(--border);
+    }
+    .toolbar label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: var(--text-dim); }
+    .toolbar label input { accent-color: var(--accent); }
+    .toolbar .opt-fields { flex: 1; min-width: 200px; }
+    .toolbar .opt-fields input {
+      width: 100%; padding: 0.4rem 0.6rem;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+      color: var(--text); font-family: inherit;
+    }
+    .toolbar .opt-fields input::placeholder { color: var(--text-dim); }
+    .panels { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+    @media (max-width: 900px) { .panels { grid-template-columns: 1fr; } }
+    .panel {
+      display: flex; flex-direction: column;
+      background: var(--surface); border-radius: 8px; border: 1px solid var(--border); overflow: hidden;
+    }
+    .panel-head {
+      padding: 0.5rem 0.75rem; background: var(--bg);
+      border-bottom: 1px solid var(--border); font-weight: 600; color: var(--text-dim);
+    }
+    .panel textarea {
+      flex: 1; min-height: 160px; padding: 0.75rem; margin: 0; border: none;
+      background: var(--bg); color: var(--text);
+      font-family: "SF Mono", Monaco, monospace; font-size: 12px; line-height: 1.5; resize: vertical;
+    }
+    .panel textarea:focus { outline: none; }
+    .panel.drag-over { outline: 2px dashed var(--accent); outline-offset: -2px; background: rgba(37, 99, 235, 0.06); }
+    .panel .drop-hint { color: var(--text-dim); font-size: 11px; padding: 0.25rem 0.75rem 0.5rem; }
+    .actions { display: flex; gap: 0.5rem; margin-bottom: 1rem; align-items: center; }
+    .btn {
+      padding: 0.5rem 1rem; border: none; border-radius: 6px;
+      font-family: inherit; font-size: 13px; cursor: pointer;
+      background: var(--accent); color: #fff; font-weight: 500;
+    }
+    .btn:hover { filter: brightness(1.1); }
+    .btn:active { filter: brightness(0.95); }
+    .btn.secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
+
+    /* export dropdown */
+    .export-wrap { position: relative; }
+    .export-menu {
+      display: none; position: absolute; bottom: calc(100% + 4px); left: 0;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 50;
+      min-width: 160px; overflow: hidden;
+    }
+    .export-menu.open { display: block; }
+    .export-menu button {
+      display: block; width: 100%; padding: 0.5rem 0.75rem; text-align: left;
+      border: none; background: transparent; font-family: inherit; font-size: 12px;
+      color: var(--text); cursor: pointer;
+    }
+    .export-menu button:hover { background: var(--bg); }
+    .export-menu button + button { border-top: 1px solid var(--border); }
+
+    /* spinner overlay */
+    .overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(247, 248, 250, 0.85);
+      z-index: 100; justify-content: center; align-items: center;
+      flex-direction: column; gap: 0.75rem;
+    }
+    .overlay.active { display: flex; }
+    .overlay .spinner {
+      width: 36px; height: 36px; border: 3px solid var(--border);
+      border-top-color: var(--accent); border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .overlay .overlay-text { color: var(--text-dim); font-size: 13px; }
+
+    /* tabs */
+    .tab-bar {
+      display: flex; gap: 0; margin-bottom: 0;
+      background: var(--bg); border-radius: 8px 8px 0 0; overflow: hidden;
+      border: 1px solid var(--border); border-bottom: none;
+    }
+    .tab-btn {
+      flex: 1; padding: 0.5rem 1rem; text-align: center;
+      background: var(--bg); border: none; color: var(--text-dim);
+      font-family: inherit; font-size: 13px; font-weight: 600;
+      cursor: pointer; border-bottom: 2px solid transparent;
+    }
+    .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--surface); }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* side-by-side diff */
+    .result {
+      background: var(--surface); border-radius: 0 0 8px 8px;
+      border: 1px solid var(--border); border-top: none; overflow: hidden;
+    }
+    .result-header { display: flex; background: var(--bg); border-bottom: 1px solid var(--border); }
+    .result-header .col-head { flex: 1; padding: 0.5rem 0.75rem; font-weight: 600; color: var(--text-dim); }
+    .result-header .col-head + .col-head { border-left: 1px solid var(--border); }
+
+    /* virtual-scroll diff container */
+    .diff-container {
+      display: flex; max-height: 55vh; overflow-y: auto; overflow-x: hidden;
+      position: relative;
+    }
+    .diff-viewport { display: flex; flex: 1; position: relative; }
+    .diff-spacer { flex-shrink: 0; }
+    .diff-side {
+      flex: 1; min-width: 0; position: relative;
+    }
+    .diff-side + .diff-side { border-left: 1px solid var(--border); }
+    .diff-row {
+      display: flex; padding: 0.2rem 0.6rem; height: 24px;
+      font-family: "SF Mono", Monaco, monospace; font-size: 12px;
+      line-height: 1.5; white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis; align-items: baseline;
+    }
+    .diff-row .path { color: var(--text-dim); margin-right: 0.5rem; flex-shrink: 0; }
+    .diff-row .val { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .diff-row.removed { background: var(--remove-bg); color: var(--remove); border-left: 3px solid var(--remove); }
+    .diff-row.added   { background: var(--add-bg);    color: var(--add);    border-left: 3px solid var(--add); }
+    .diff-row.changed { background: var(--change-bg); color: var(--change); border-left: 3px solid var(--change); }
+    .diff-row.blank   { background: transparent; color: transparent; user-select: none; }
+    .diff-row:not(.blank) { cursor: pointer; transition: filter 0.15s; }
+    .diff-row:not(.blank):hover { filter: brightness(0.92); }
+    .diff-row.active-row { outline: 2px solid var(--accent); outline-offset: -2px; }
+    .summary { padding: 0.5rem 0.75rem; color: var(--text-dim); font-size: 12px; border-bottom: 1px solid var(--border); }
+    .no-diff { padding: 1rem; color: var(--text-dim); font-style: italic; }
+    .error { color: var(--remove); padding: 0.75rem; }
+
+    /* lazy code viewer */
+    .panel .code-view {
+      position: relative; flex: 1; min-height: 160px; max-height: 400px;
+      overflow: auto; background: var(--bg);
+      font-family: "SF Mono", Monaco, monospace; font-size: 12px; line-height: 18px;
+      padding: 0; margin: 0; display: none;
+    }
+    .panel .code-view.active { display: block; }
+    .code-view-inner { position: relative; }
+    .code-view-canvas { position: relative; }
+    .cv-line {
+      display: flex; padding: 0 0.75rem 0 0; height: 18px;
+      white-space: pre; overflow: hidden;
+    }
+    .cv-line .ln {
+      flex-shrink: 0; width: 3.5em; text-align: right; padding-right: 0.75rem;
+      color: var(--text-dim); opacity: 0.5; user-select: none;
+    }
+    .cv-line .lt { flex: 1; color: var(--text); }
+    .cv-line.hl { background: rgba(37, 99, 235, 0.12); }
+    .cv-line.hl-flash { background: rgba(37, 99, 235, 0.28); transition: background 0.4s; }
+    .code-view-hint {
+      display: none; font-size: 10px; color: var(--text-dim);
+      padding: 0.2rem 0.75rem; background: var(--surface);
+      border-top: 1px solid var(--border); cursor: pointer;
+    }
+    .code-view-hint.active { display: block; }
+
+    /* key frequency stats */
+    .stats-panel {
+      background: var(--surface); border-radius: 0 0 8px 8px;
+      border: 1px solid var(--border); border-top: none;
+      max-height: 60vh; overflow: auto; padding: 0;
+    }
+    .stats-table { width: 100%; border-collapse: collapse; }
+    .stats-table th {
+      position: sticky; top: 0; background: var(--bg);
+      padding: 0.5rem 0.75rem; text-align: left;
+      font-weight: 600; color: var(--text-dim);
+      border-bottom: 1px solid var(--border);
+    }
+    .stats-table td { padding: 0.4rem 0.75rem; border-bottom: 1px solid var(--border); font-size: 12px; }
+    .stats-table tr:hover td { background: rgba(37, 99, 235, 0.06); }
+    .stats-table .bar-cell { width: 40%; }
+    .stats-bar-wrap { background: var(--bg); border-radius: 4px; height: 18px; overflow: hidden; display: flex; align-items: center; }
+    .stats-bar { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
+    .stats-bar.added { background: var(--add); }
+    .stats-bar.removed { background: var(--remove); }
+    .stats-bar.changed { background: var(--change); }
+    .stats-bar.mixed { background: var(--accent); }
+    .stats-count { font-weight: 600; min-width: 2.5em; text-align: right; }
+    .stats-key { color: var(--accent); }
+    .stats-badges { display: flex; gap: 0.3rem; }
+    .stats-badge { font-size: 10px; padding: 0.1rem 0.35rem; border-radius: 3px; font-weight: 600; }
+    .stats-badge.a { background: var(--add-bg); color: var(--add); }
+    .stats-badge.r { background: var(--remove-bg); color: var(--remove); }
+    .stats-badge.c { background: var(--change-bg); color: var(--change); }
+    .stats-empty { padding: 1rem; color: var(--text-dim); font-style: italic; }
+
+    /* tool navigation */
+    .tool-nav {
+      display: flex; gap: 0; margin-bottom: 1rem;
+      background: var(--surface); border-radius: 8px; overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    .tool-nav-btn {
+      flex: 1; padding: 0.65rem 1rem; text-align: center;
+      background: var(--surface); border: none; color: var(--text-dim);
+      font-family: inherit; font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: all 0.15s;
+      border-bottom: 2px solid transparent;
+    }
+    .tool-nav-btn:hover { background: var(--bg); }
+    .tool-nav-btn.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--bg); }
+    .tool-view { display: none; }
+    .tool-view.active { display: block; }
+
+    /* validator results */
+    .v-results {
+      background: var(--surface); border-radius: 8px; border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .v-results-head {
+      padding: 0.5rem 0.75rem; background: var(--bg);
+      border-bottom: 1px solid var(--border); font-weight: 600; color: var(--text-dim);
+    }
+    .v-results-body { max-height: 50vh; overflow: auto; }
+    .v-result-item {
+      display: flex; align-items: baseline; gap: 0.5rem;
+      padding: 0.4rem 0.75rem; border-bottom: 1px solid var(--border);
+      font-size: 12px; font-family: "SF Mono", Monaco, monospace;
+    }
+    .v-result-item:last-child { border-bottom: none; }
+    .v-result-item .v-idx { color: var(--text-dim); flex-shrink: 0; min-width: 2em; text-align: right; }
+    .v-result-item .v-path { color: var(--accent); flex-shrink: 0; font-weight: 600; }
+    .v-result-item .v-msg { color: var(--remove); }
+    .v-valid {
+      padding: 1rem; color: var(--add); font-weight: 600;
+      display: flex; align-items: center; gap: 0.5rem; font-size: 13px;
+    }
+    .v-empty { padding: 1rem; color: var(--text-dim); font-style: italic; }
+    .v-error-count {
+      padding: 0.5rem 0.75rem; font-size: 12px; color: var(--text-dim);
+      border-bottom: 1px solid var(--border); background: var(--bg);
+    }
+
+    /* formatter */
+    .f-options {
+      display: flex; flex-wrap: wrap; gap: 1rem; align-items: center;
+      margin-bottom: 1rem; padding: 0.75rem;
+      background: var(--surface); border-radius: 8px; border: 1px solid var(--border);
+    }
+    .f-options label { display: flex; align-items: center; gap: 0.5rem; cursor: pointer; color: var(--text-dim); }
+    .f-options label input { accent-color: var(--accent); }
+    .f-options label select {
+      font-family: inherit; font-size: 12px;
+      padding: 0.3rem 0.5rem; background: var(--bg); border: 1px solid var(--border);
+      border-radius: 4px; color: var(--text);
+    }
+    .f-output-head {
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .f-output-head .btn { padding: 0.25rem 0.6rem; font-size: 11px; }
+    .f-stats {
+      padding: 0.4rem 0.75rem; font-size: 11px; color: var(--text-dim);
+      border-top: 1px solid var(--border); background: var(--surface);
+    }
+  </style>
+</head>
+<body>
+  <div class="overlay" id="overlay">
+    <div class="spinner"></div>
+    <div class="overlay-text" id="overlayText">Comparing...</div>
+  </div>
+  <div class="app">
+    <h1>JSON Toolkit</h1>
+    <div class="tool-nav">
+      <button class="tool-nav-btn active" data-tool="diff">Diff</button>
+      <button class="tool-nav-btn" data-tool="validator">Schema Validator</button>
+      <button class="tool-nav-btn" data-tool="formatter">Formatter</button>
+    </div>
+    <div class="tool-view active" id="toolDiff">
+    <div class="toolbar">
+      <label><input type="checkbox" id="ignoreOrder" /> Ignore array/object order</label>
+      <label><input type="checkbox" id="ignoreCase" /> Ignore string casing</label>
+      <label class="opt-fields">
+        Ignore keys (comma-separated):
+        <input type="text" id="ignoreKeys" placeholder="e.g. id, timestamp, _meta" />
+      </label>
+    </div>
+    <div class="panels">
+      <div class="panel" id="panelA" data-target="A">
+        <div class="panel-head">JSON A</div>
+        <textarea id="jsonA" placeholder='Paste, drag & drop, or load first JSON...'></textarea>
+        <div class="code-view" id="codeViewA"><div class="code-view-inner" id="cvInnerA"><div class="code-view-canvas" id="cvCanvasA"></div></div></div>
+        <div class="code-view-hint" id="editHintA">Click to edit JSON A</div>
+        <div class="drop-hint">Drop a .json file here</div>
+      </div>
+      <div class="panel" id="panelB" data-target="B">
+        <div class="panel-head">JSON B</div>
+        <textarea id="jsonB" placeholder='Paste, drag & drop, or load second JSON...'></textarea>
+        <div class="code-view" id="codeViewB"><div class="code-view-inner" id="cvInnerB"><div class="code-view-canvas" id="cvCanvasB"></div></div></div>
+        <div class="code-view-hint" id="editHintB">Click to edit JSON B</div>
+        <div class="drop-hint">Drop a .json file here</div>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="compareBtn">Compare</button>
+      <button class="btn secondary" id="clearBtn">Clear</button>
+      <button class="btn secondary" id="loadFileA">Load file &rarr; A</button>
+      <button class="btn secondary" id="loadFileB">Load file &rarr; B</button>
+      <div class="export-wrap">
+        <button class="btn secondary" id="exportBtn" disabled>Export &darr;</button>
+        <div class="export-menu" id="exportMenu">
+          <button data-fmt="json">Export as JSON</button>
+          <button data-fmt="csv">Export as CSV</button>
+          <button data-fmt="text">Export as Text</button>
+        </div>
+      </div>
+    </div>
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="diff">Side-by-side diff</button>
+      <button class="tab-btn" data-tab="stats">Key frequency</button>
+    </div>
+    <div class="tab-content active" id="tabDiff">
+      <div class="result">
+        <div class="result-header">
+          <div class="col-head">JSON A (left)</div>
+          <div class="col-head">JSON B (right)</div>
+        </div>
+        <div class="summary" id="summaryBar" style="display:none"></div>
+        <div class="diff-container" id="diffContainer">
+          <div class="diff-viewport" id="diffViewport">
+            <div class="diff-side" id="diffLeft"></div>
+            <div class="diff-side" id="diffRight"></div>
+          </div>
+        </div>
+        <div class="no-diff" id="noDiff">Click Compare to see differences.</div>
+      </div>
+    </div>
+    <div class="tab-content" id="tabStats">
+      <div class="stats-panel">
+        <div class="stats-empty" id="statsEmpty">Click Compare to see key frequency.</div>
+        <table class="stats-table" id="statsTable" style="display:none">
+          <thead><tr><th>#</th><th>Key</th><th>Count</th><th>Types</th><th class="bar-cell">Frequency</th></tr></thead>
+          <tbody id="statsBody"></tbody>
+        </table>
+      </div>
+    </div>
+    </div><!-- end toolDiff -->
+
+    <div class="tool-view" id="toolValidator">
+      <div class="panels">
+        <div class="panel">
+          <div class="panel-head">JSON Document</div>
+          <textarea id="vJsonDoc" placeholder='Paste JSON document to validate...'></textarea>
+        </div>
+        <div class="panel">
+          <div class="panel-head">JSON Schema</div>
+          <textarea id="vJsonSchema" placeholder='Paste JSON Schema (draft-07)...'></textarea>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="validateBtn">Validate</button>
+        <button class="btn secondary" id="vClearBtn">Clear</button>
+        <button class="btn secondary" id="vLoadDoc">Load document</button>
+        <button class="btn secondary" id="vLoadSchema">Load schema</button>
+        <button class="btn secondary" id="vLoadSample">Load sample schema</button>
+      </div>
+      <div class="v-results">
+        <div class="v-results-head">Validation Results</div>
+        <div class="v-results-body" id="vResultsBody">
+          <div class="v-empty" id="vEmpty">Click Validate to check the JSON document against the schema.</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tool-view" id="toolFormatter">
+      <div class="f-options">
+        <label>
+          Indent:
+          <select id="fIndent">
+            <option value="2">2 spaces</option>
+            <option value="4">4 spaces</option>
+            <option value="tab">Tab</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="fSortKeys" /> Sort keys alphabetically</label>
+        <label><input type="checkbox" id="fMinify" /> Minify</label>
+      </div>
+      <div class="panels">
+        <div class="panel">
+          <div class="panel-head">Input</div>
+          <textarea id="fInput" placeholder='Paste JSON to format...'></textarea>
+        </div>
+        <div class="panel">
+          <div class="panel-head f-output-head">
+            <span>Output</span>
+            <button class="btn secondary" id="fCopyBtn">Copy</button>
+          </div>
+          <textarea id="fOutput" readonly placeholder='Formatted output will appear here...' style="cursor:default;"></textarea>
+          <div class="f-stats" id="fStats"></div>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="formatBtn">Format</button>
+        <button class="btn secondary" id="fClearBtn">Clear</button>
+        <button class="btn secondary" id="fLoadFile">Load file</button>
+      </div>
+    </div>
+
+  </div>
+  <input type="file" id="fileInput" accept=".json,application/json" style="display:none" />
+  <input type="file" id="vFileInput" accept=".json,application/json" style="display:none" />
+  <input type="file" id="fFileInput" accept=".json,application/json" style="display:none" />
+
+  <script>
+  /* ═══════════════════════════════════════════════════════════
+     INLINE WEB WORKER — diff engine runs off the main thread
+     ═══════════════════════════════════════════════════════════ */
+  const WORKER_SRC = function () {
+    'use strict';
+
+    function normalizeForKeyCompare(val, opts) {
+      if (val === null) return 'null';
+      if (typeof val === 'boolean') return String(val);
+      if (typeof val === 'number') return String(val);
+      if (typeof val === 'string') return opts.ignoreCase ? val.toLowerCase() : val;
+      if (Array.isArray(val)) {
+        const mapped = val.map(v => normalizeForKeyCompare(v, opts));
+        return JSON.stringify(opts.ignoreOrder ? [...mapped].sort() : mapped);
+      }
+      if (typeof val === 'object') {
+        const keys = Object.keys(val).sort();
+        const o = {};
+        for (const k of keys) { if (!opts.ignoreKeys.includes(k)) o[k] = normalizeForKeyCompare(val[k], opts); }
+        return JSON.stringify(o);
+      }
+      return String(val);
+    }
+
+    function flattenLeaves(val, basePath) {
+      if (val === null || typeof val !== 'object') return [{ path: basePath, value: val }];
+      if (Array.isArray(val)) {
+        const out = [];
+        val.forEach((v, i) => out.push(...flattenLeaves(v, basePath + '[' + i + ']')));
+        return out.length ? out : [{ path: basePath, value: [] }];
+      }
+      const out = [];
+      for (const k of Object.keys(val)) out.push(...flattenLeaves(val[k], basePath ? basePath + '.' + k : k));
+      return out.length ? out : [{ path: basePath, value: {} }];
+    }
+
+    function compareValues(a, b, path, opts, out) {
+      const skip = (key) => key && opts.ignoreKeys.includes(key);
+      const lastKey = path.replace(/\[\d+\]/g, '').split('.').filter(Boolean).pop();
+      if (lastKey && skip(lastKey)) return;
+      if (typeof a !== typeof b) { out.push({ type: 'changed', path, left: a, right: b }); return; }
+      if (a === null && b === null) return;
+      if (a === null || b === null) { out.push({ type: 'changed', path, left: a, right: b }); return; }
+      if (typeof a !== 'object') {
+        const va = typeof a === 'string' && opts.ignoreCase ? a.toLowerCase() : a;
+        const vb = typeof b === 'string' && opts.ignoreCase ? b.toLowerCase() : b;
+        if (va !== vb) out.push({ type: 'changed', path, left: a, right: b });
+        return;
+      }
+      if (Array.isArray(a) && Array.isArray(b)) {
+        if (opts.ignoreOrder) {
+          /* ── O(n+m) hash-based matching ── */
+          const mapB = new Map();
+          for (let j = 0; j < b.length; j++) {
+            const h = normalizeForKeyCompare(b[j], opts);
+            if (!mapB.has(h)) mapB.set(h, []);
+            mapB.get(h).push(j);
+          }
+          const usedB = new Set(), unmatchedA = [];
+          for (let i = 0; i < a.length; i++) {
+            const h = normalizeForKeyCompare(a[i], opts);
+            const slots = mapB.get(h);
+            if (slots && slots.length) { usedB.add(slots.shift()); }
+            else { unmatchedA.push(i); }
+          }
+          const unmatchedB = [];
+          for (let j = 0; j < b.length; j++) { if (!usedB.has(j)) unmatchedB.push(j); }
+          const pairLen = Math.min(unmatchedA.length, unmatchedB.length);
+          for (let x = 0; x < pairLen; x++)
+            compareValues(a[unmatchedA[x]], b[unmatchedB[x]], path + '[' + unmatchedA[x] + ']', opts, out);
+          for (let x = pairLen; x < unmatchedA.length; x++)
+            flattenLeaves(a[unmatchedA[x]], path + '[' + unmatchedA[x] + ']').forEach(l => out.push({ type: 'removed', path: l.path, value: l.value }));
+          for (let x = pairLen; x < unmatchedB.length; x++)
+            flattenLeaves(b[unmatchedB[x]], path + '[' + unmatchedB[x] + ']').forEach(l => out.push({ type: 'added', path: l.path, value: l.value }));
+          return;
+        }
+        const len = Math.max(a.length, b.length);
+        for (let i = 0; i < len; i++) {
+          const p = path + '[' + i + ']';
+          if (i >= a.length) flattenLeaves(b[i], p).forEach(l => out.push({ type: 'added', path: l.path, value: l.value }));
+          else if (i >= b.length) flattenLeaves(a[i], p).forEach(l => out.push({ type: 'removed', path: l.path, value: l.value }));
+          else compareValues(a[i], b[i], p, opts, out);
+        }
+        return;
+      }
+      if (Array.isArray(a) !== Array.isArray(b)) { out.push({ type: 'changed', path, left: a, right: b }); return; }
+      const prefix = path ? path + '.' : '';
+      const allKeys = new Set([...Object.keys(a), ...Object.keys(b)]);
+      for (const k of allKeys) {
+        if (skip(k)) continue;
+        const p = prefix + k;
+        if (!(k in a)) flattenLeaves(b[k], p).forEach(l => out.push({ type: 'added', path: l.path, value: l.value }));
+        else if (!(k in b)) flattenLeaves(a[k], p).forEach(l => out.push({ type: 'removed', path: l.path, value: l.value }));
+        else compareValues(a[k], b[k], p, opts, out);
+      }
+    }
+
+    function prettyPrintWithMap(obj) {
+      const lineMap = {}; let lineNum = 0;
+      const chunks = [];
+      function nl() { lineNum++; chunks.push('\n'); }
+      function add(s) { chunks.push(s); }
+      function format(val, path, indent) {
+        lineMap[path] = lineNum;
+        if (val === null) { add('null'); return; }
+        if (typeof val === 'boolean' || typeof val === 'number') { add(String(val)); return; }
+        if (typeof val === 'string') { add(JSON.stringify(val)); return; }
+        const pad = ' '.repeat(indent + 2);
+        if (Array.isArray(val)) {
+          if (val.length === 0) { add('[]'); return; }
+          add('['); nl();
+          for (let i = 0; i < val.length; i++) {
+            add(pad);
+            format(val[i], path ? path + '[' + i + ']' : '[' + i + ']', indent + 2);
+            if (i < val.length - 1) add(',');
+            nl();
+          }
+          add(' '.repeat(indent) + ']');
+          return;
+        }
+        const keys = Object.keys(val);
+        if (keys.length === 0) { add('{}'); return; }
+        add('{'); nl();
+        for (let i = 0; i < keys.length; i++) {
+          const k = keys[i], p = path ? path + '.' + k : k;
+          add(pad + JSON.stringify(k) + ': ');
+          lineMap[p] = lineNum;
+          format(val[k], p, indent + 2);
+          if (i < keys.length - 1) add(',');
+          nl();
+        }
+        add(' '.repeat(indent) + '}');
+      }
+      format(obj, '', 0);
+      return { text: chunks.join(''), lineMap };
+    }
+
+    function extractKeyName(path) {
+      const clean = path.replace(/\[\d+\]/g, '').replace(/\[.*?\]/g, '');
+      const parts = clean.split('.').filter(Boolean);
+      return parts.length ? parts[parts.length - 1] : '(root)';
+    }
+
+    function buildStats(diffs) {
+      const map = {};
+      for (const d of diffs) {
+        const key = extractKeyName(d.path);
+        if (!map[key]) map[key] = { count: 0, added: 0, removed: 0, changed: 0 };
+        map[key].count++;
+        if (d.type === 'added') map[key].added++;
+        else if (d.type === 'removed') map[key].removed++;
+        else map[key].changed++;
+      }
+      return Object.entries(map).sort((a, b) => b[1].count - a[1].count);
+    }
+
+    self.onmessage = function (e) {
+      const { jsonStrA, jsonStrB, opts } = e.data;
+      const t0 = performance.now();
+      try {
+        const a = JSON.parse(jsonStrA || 'null');
+        const b = JSON.parse(jsonStrB || 'null');
+        const ppA = prettyPrintWithMap(a);
+        const ppB = prettyPrintWithMap(b);
+        const diffs = [];
+        compareValues(a, b, '', opts, diffs);
+        const stats = buildStats(diffs);
+        const elapsed = Math.round(performance.now() - t0);
+        self.postMessage({ diffs, ppTextA: ppA.text, ppTextB: ppB.text, lineMapA: ppA.lineMap, lineMapB: ppB.lineMap, stats, elapsed });
+      } catch (err) {
+        self.postMessage({ error: err.message });
+      }
+    };
+  }.toString();
+
+  /* ═══════════════════════════════════════
+     MAIN THREAD
+     ═══════════════════════════════════════ */
+  (function () {
+    const $ = (id) => document.getElementById(id);
+    const jsonA = $('jsonA'), jsonB = $('jsonB');
+    const diffLeft = $('diffLeft'), diffRight = $('diffRight');
+    const summaryBar = $('summaryBar'), noDiff = $('noDiff');
+    const diffContainer = $('diffContainer');
+    const overlay = $('overlay'), overlayText = $('overlayText');
+    const codeViewA = $('codeViewA'), codeViewB = $('codeViewB');
+    const editHintA = $('editHintA'), editHintB = $('editHintB');
+    const cvInnerA = $('cvInnerA'), cvInnerB = $('cvInnerB');
+    const cvCanvasA = $('cvCanvasA'), cvCanvasB = $('cvCanvasB');
+    const statsTable = $('statsTable'), statsBody = $('statsBody'), statsEmpty = $('statsEmpty');
+    const ignoreOrderEl = $('ignoreOrder'), ignoreCaseEl = $('ignoreCase'), ignoreKeysInput = $('ignoreKeys');
+    const fileInput = $('fileInput');
+    let loadTarget = null;
+    let lineMapA = {}, lineMapB = {};
+    let allDiffs = [];
+
+    const ROW_H = 24;     // diff row height
+    const CV_LINE_H = 18; // code-view line height
+
+    /* ─── create worker from inline source ─── */
+    const workerBlob = new Blob(
+      ['(' + WORKER_SRC + ')()'],
+      { type: 'application/javascript' }
+    );
+    const workerUrl = URL.createObjectURL(workerBlob);
+    let worker = new Worker(workerUrl);
+
+    /* ─── tabs ─── */
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        btn.classList.add('active');
+        $('tab' + btn.dataset.tab.charAt(0).toUpperCase() + btn.dataset.tab.slice(1)).classList.add('active');
+      });
+    });
+
+    function parseOptions() {
+      const keysStr = (ignoreKeysInput.value || '').trim();
+      const ik = keysStr ? keysStr.split(/\s*,\s*/).map(k => k.trim()).filter(Boolean) : [];
+      return { ignoreOrder: ignoreOrderEl.checked, ignoreCase: ignoreCaseEl.checked, ignoreKeys: ik };
+    }
+
+    /* ─── pretty-print (main-thread copy for re-render on edit exit) ─── */
+    function prettyPrintWithMapMain(obj) {
+      const lineMap = {}; let lineNum = 0;
+      const chunks = [];
+      function nl() { lineNum++; chunks.push('\n'); }
+      function add(s) { chunks.push(s); }
+      function format(val, path, indent) {
+        lineMap[path] = lineNum;
+        if (val === null) { add('null'); return; }
+        if (typeof val === 'boolean' || typeof val === 'number') { add(String(val)); return; }
+        if (typeof val === 'string') { add(JSON.stringify(val)); return; }
+        const pad = ' '.repeat(indent + 2);
+        if (Array.isArray(val)) {
+          if (val.length === 0) { add('[]'); return; }
+          add('['); nl();
+          for (let i = 0; i < val.length; i++) { add(pad); format(val[i], path ? path + '[' + i + ']' : '[' + i + ']', indent + 2); if (i < val.length - 1) add(','); nl(); }
+          add(' '.repeat(indent) + ']'); return;
+        }
+        const keys = Object.keys(val);
+        if (keys.length === 0) { add('{}'); return; }
+        add('{'); nl();
+        for (let i = 0; i < keys.length; i++) {
+          const k = keys[i], p = path ? path + '.' + k : k;
+          add(pad + JSON.stringify(k) + ': '); lineMap[p] = lineNum;
+          format(val[k], p, indent + 2); if (i < keys.length - 1) add(','); nl();
+        }
+        add(' '.repeat(indent) + '}');
+      }
+      format(obj, '', 0);
+      return { text: chunks.join(''), lineMap };
+    }
+
+    /* ─── helpers ─── */
+    function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function fmtVal(v) {
+      if (v === null) return '<em>null</em>';
+      if (typeof v === 'string') return '"' + esc(v) + '"';
+      return esc(JSON.stringify(v));
+    }
+
+    /* ═══════════════════════════════════════
+       VIRTUAL-SCROLL DIFF
+       ═══════════════════════════════════════ */
+
+    let diffData = []; // [{type, path, value/left/right}]
+    let activeIdx = -1;
+
+    function renderDiffViewport() {
+      const count = diffData.length;
+      if (!count) return;
+      const totalH = count * ROW_H;
+      const scrollTop = diffContainer.scrollTop;
+      const viewH = diffContainer.clientHeight;
+      const startIdx = Math.max(0, Math.floor(scrollTop / ROW_H) - 5);
+      const endIdx = Math.min(count, Math.ceil((scrollTop + viewH) / ROW_H) + 5);
+
+      const vpEl = $('diffViewport');
+      vpEl.style.height = totalH + 'px';
+      diffLeft.style.position = 'absolute';
+      diffLeft.style.top = (startIdx * ROW_H) + 'px';
+      diffLeft.style.left = '0';
+      diffLeft.style.width = '50%';
+      diffRight.style.position = 'absolute';
+      diffRight.style.top = (startIdx * ROW_H) + 'px';
+      diffRight.style.right = '0';
+      diffRight.style.width = '50%';
+      diffRight.style.borderLeft = '1px solid var(--border)';
+
+      let lh = '', rh = '';
+      for (let i = startIdx; i < endIdx; i++) {
+        const d = diffData[i];
+        const p = esc(d.path || '(root)');
+        const act = i === activeIdx ? ' active-row' : '';
+        if (d.type === 'removed') {
+          lh += '<div class="diff-row removed' + act + '" data-idx="' + i + '" data-side="A"><span class="path">' + p + '</span><span class="val">' + fmtVal(d.value) + '</span></div>';
+          rh += '<div class="diff-row blank">&nbsp;</div>';
+        } else if (d.type === 'added') {
+          lh += '<div class="diff-row blank">&nbsp;</div>';
+          rh += '<div class="diff-row added' + act + '" data-idx="' + i + '" data-side="B"><span class="path">' + p + '</span><span class="val">' + fmtVal(d.value) + '</span></div>';
+        } else {
+          lh += '<div class="diff-row changed' + act + '" data-idx="' + i + '" data-side="A"><span class="path">' + p + '</span><span class="val">' + fmtVal(d.left) + '</span></div>';
+          rh += '<div class="diff-row changed' + act + '" data-idx="' + i + '" data-side="B"><span class="path">' + p + '</span><span class="val">' + fmtVal(d.right) + '</span></div>';
+        }
+      }
+      diffLeft.innerHTML = lh;
+      diffRight.innerHTML = rh;
+    }
+
+    let diffScrollRAF = 0;
+    diffContainer.addEventListener('scroll', () => {
+      if (diffScrollRAF) return;
+      diffScrollRAF = requestAnimationFrame(() => { diffScrollRAF = 0; renderDiffViewport(); });
+    });
+
+    /* ─── diff row click → locate ─── */
+    function findBestLine(path, lm) {
+      if (path in lm) return lm[path];
+      let p = path;
+      while (p) { const cut = Math.max(p.lastIndexOf('.'), p.lastIndexOf('[')); if (cut <= 0) break; p = p.substring(0, cut); if (p in lm) return lm[p]; }
+      return 0;
+    }
+    function onDiffRowClick(e) {
+      const row = e.target.closest('.diff-row:not(.blank)');
+      if (!row) return;
+      const idx = parseInt(row.dataset.idx);
+      const side = row.dataset.side;
+      const d = diffData[idx];
+      if (!d) return;
+      activeIdx = idx;
+      renderDiffViewport();
+      if (side === 'A' || side === 'both') flashCodeLine('A', findBestLine(d.path, lineMapA));
+      if (side === 'B' || side === 'both') flashCodeLine('B', findBestLine(d.path, lineMapB));
+    }
+    diffLeft.addEventListener('click', onDiffRowClick);
+    diffRight.addEventListener('click', onDiffRowClick);
+
+    /* ═══════════════════════════════════════
+       LAZY CODE VIEW (virtual scroll)
+       ═══════════════════════════════════════ */
+
+    let cvLinesA = [], cvLinesB = [];
+    let cvHlSetA = new Set(), cvHlSetB = new Set();
+
+    function setupLazyCodeView(container, inner, canvas, linesArr, hlSet) {
+      const totalH = linesArr.length * CV_LINE_H;
+      inner.style.height = totalH + 'px';
+      function render() {
+        const scrollTop = container.scrollTop;
+        const viewH = container.clientHeight;
+        const start = Math.max(0, Math.floor(scrollTop / CV_LINE_H) - 5);
+        const end = Math.min(linesArr.length, Math.ceil((scrollTop + viewH) / CV_LINE_H) + 5);
+        canvas.style.position = 'absolute';
+        canvas.style.top = (start * CV_LINE_H) + 'px';
+        canvas.style.left = '0';
+        canvas.style.right = '0';
+        let html = '';
+        for (let i = start; i < end; i++) {
+          const cls = hlSet.has(i) ? ' hl' : '';
+          html += '<div class="cv-line' + cls + '" data-line="' + i + '"><span class="ln">' + (i + 1) + '</span><span class="lt">' + esc(linesArr[i]) + '</span></div>';
+        }
+        canvas.innerHTML = html;
+      }
+      let raf = 0;
+      container.onscroll = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; render(); }); };
+      render();
+      return render;
+    }
+
+    let renderCVA = null, renderCVB = null;
+
+    function showCodeViews(textA, textB, pathsA, pathsB) {
+      cvLinesA = textA.split('\n');
+      cvLinesB = textB.split('\n');
+      cvHlSetA = new Set();
+      cvHlSetB = new Set();
+      for (const p of pathsA) {
+        if (p in lineMapA) cvHlSetA.add(lineMapA[p]);
+        const dot = p.lastIndexOf('.'), brk = p.lastIndexOf('['), parent = p.substring(0, Math.max(dot, brk));
+        if (parent && parent in lineMapA) cvHlSetA.add(lineMapA[parent]);
+      }
+      for (const p of pathsB) {
+        if (p in lineMapB) cvHlSetB.add(lineMapB[p]);
+        const dot = p.lastIndexOf('.'), brk = p.lastIndexOf('['), parent = p.substring(0, Math.max(dot, brk));
+        if (parent && parent in lineMapB) cvHlSetB.add(lineMapB[parent]);
+      }
+      jsonA.style.display = 'none'; jsonB.style.display = 'none';
+      codeViewA.classList.add('active'); codeViewB.classList.add('active');
+      editHintA.classList.add('active'); editHintB.classList.add('active');
+      renderCVA = setupLazyCodeView(codeViewA, cvInnerA, cvCanvasA, cvLinesA, cvHlSetA);
+      renderCVB = setupLazyCodeView(codeViewB, cvInnerB, cvCanvasB, cvLinesB, cvHlSetB);
+    }
+
+    function flashCodeLine(side, lineNum) {
+      const cv = side === 'A' ? codeViewA : codeViewB;
+      const hl = side === 'A' ? cvHlSetA : cvHlSetB;
+      // scroll to line
+      cv.scrollTop = Math.max(0, lineNum * CV_LINE_H - cv.clientHeight / 3);
+      // re-render then flash
+      const renderFn = side === 'A' ? renderCVA : renderCVB;
+      if (renderFn) renderFn();
+      requestAnimationFrame(() => {
+        const row = cv.querySelector('.cv-line[data-line="' + lineNum + '"]');
+        if (!row) return;
+        row.classList.add('hl-flash');
+        setTimeout(() => { row.classList.remove('hl-flash'); }, 1500);
+      });
+    }
+
+    function switchToEdit(side) {
+      if (side === 'A' || side === 'both') { codeViewA.classList.remove('active'); editHintA.classList.remove('active'); jsonA.style.display = ''; codeViewA.onscroll = null; }
+      if (side === 'B' || side === 'both') { codeViewB.classList.remove('active'); editHintB.classList.remove('active'); jsonB.style.display = ''; codeViewB.onscroll = null; }
+    }
+
+    function switchBackToCodeView(side) {
+      /* Re-parse current textarea content and show the lazy code view again */
+      if (side === 'A' || side === 'both') {
+        if (jsonA.style.display === 'none') return; /* already in code view */
+        if (!cvLinesA.length && !jsonA.value.trim()) return; /* nothing to show */
+        try {
+          const obj = JSON.parse(jsonA.value || 'null');
+          const pp = prettyPrintWithMapMain(obj);
+          lineMapA = pp.lineMap;
+          jsonA.value = pp.text;
+          cvLinesA = pp.text.split('\n');
+          /* rebuild highlight set from current diffs */
+          cvHlSetA = new Set();
+          for (const d of diffData) {
+            const p = d.path || '(root)';
+            if (d.type !== 'added') {
+              if (p in lineMapA) cvHlSetA.add(lineMapA[p]);
+              const dot = p.lastIndexOf('.'), brk = p.lastIndexOf('['), parent = p.substring(0, Math.max(dot, brk));
+              if (parent && parent in lineMapA) cvHlSetA.add(lineMapA[parent]);
+            }
+          }
+          jsonA.style.display = 'none';
+          codeViewA.classList.add('active'); editHintA.classList.add('active');
+          renderCVA = setupLazyCodeView(codeViewA, cvInnerA, cvCanvasA, cvLinesA, cvHlSetA);
+        } catch (e) { /* invalid JSON — stay in edit mode */ }
+      }
+      if (side === 'B' || side === 'both') {
+        if (jsonB.style.display === 'none') return;
+        if (!cvLinesB.length && !jsonB.value.trim()) return;
+        try {
+          const obj = JSON.parse(jsonB.value || 'null');
+          const pp = prettyPrintWithMapMain(obj);
+          lineMapB = pp.lineMap;
+          jsonB.value = pp.text;
+          cvLinesB = pp.text.split('\n');
+          cvHlSetB = new Set();
+          for (const d of diffData) {
+            const p = d.path || '(root)';
+            if (d.type !== 'removed') {
+              if (p in lineMapB) cvHlSetB.add(lineMapB[p]);
+              const dot = p.lastIndexOf('.'), brk = p.lastIndexOf('['), parent = p.substring(0, Math.max(dot, brk));
+              if (parent && parent in lineMapB) cvHlSetB.add(lineMapB[parent]);
+            }
+          }
+          jsonB.style.display = 'none';
+          codeViewB.classList.add('active'); editHintB.classList.add('active');
+          renderCVB = setupLazyCodeView(codeViewB, cvInnerB, cvCanvasB, cvLinesB, cvHlSetB);
+        } catch (e) { /* invalid JSON — stay in edit mode */ }
+      }
+    }
+
+    editHintA.addEventListener('click', () => switchToEdit('A'));
+    editHintB.addEventListener('click', () => switchToEdit('B'));
+
+    /* ─── click outside panel exits edit mode ─── */
+    const panelA = $('panelA'), panelB = $('panelB');
+    document.addEventListener('mousedown', (e) => {
+      /* If panel A is in edit mode and click is outside it, switch back */
+      if (jsonA.style.display !== 'none' && cvLinesA.length && !panelA.contains(e.target)) {
+        switchBackToCodeView('A');
+      }
+      if (jsonB.style.display !== 'none' && cvLinesB.length && !panelB.contains(e.target)) {
+        switchBackToCodeView('B');
+      }
+    });
+
+    /* ═══════════════════════════════════════
+       STATS RENDERING
+       ═══════════════════════════════════════ */
+
+    function renderStats(stats) {
+      if (!stats.length) {
+        statsTable.style.display = 'none';
+        statsEmpty.style.display = 'block';
+        statsEmpty.textContent = 'No differences found.';
+        return;
+      }
+      statsEmpty.style.display = 'none';
+      statsTable.style.display = '';
+      const maxCount = stats[0][1].count;
+      let html = '';
+      for (let idx = 0; idx < stats.length; idx++) {
+        const [key, s] = stats[idx];
+        const pct = Math.max(4, Math.round(s.count / maxCount * 100));
+        let barCls = 'mixed';
+        if (s.added && !s.removed && !s.changed) barCls = 'added';
+        else if (s.removed && !s.added && !s.changed) barCls = 'removed';
+        else if (s.changed && !s.added && !s.removed) barCls = 'changed';
+        let badges = '';
+        if (s.added) badges += '<span class="stats-badge a">+' + s.added + '</span>';
+        if (s.removed) badges += '<span class="stats-badge r">&minus;' + s.removed + '</span>';
+        if (s.changed) badges += '<span class="stats-badge c">~' + s.changed + '</span>';
+        html += '<tr><td>' + (idx + 1) + '</td><td class="stats-key">' + esc(key) + '</td><td class="stats-count">' + s.count + '</td><td><div class="stats-badges">' + badges + '</div></td><td class="bar-cell"><div class="stats-bar-wrap"><div class="stats-bar ' + barCls + '" style="width:' + pct + '%"></div></div></td></tr>';
+      }
+      statsBody.innerHTML = html;
+    }
+
+    /* ═══════════════════════════════════════
+       RUN DIFF (via Worker)
+       ═══════════════════════════════════════ */
+
+    function runDiff() {
+      let rawA, rawB;
+      try { JSON.parse(jsonA.value || 'null'); rawA = jsonA.value; } catch (e) {
+        diffLeft.innerHTML = '<div class="error">JSON A: Invalid — ' + esc(e.message) + '</div>';
+        diffRight.innerHTML = ''; summaryBar.style.display = 'none'; noDiff.style.display = 'none'; return;
+      }
+      try { JSON.parse(jsonB.value || 'null'); rawB = jsonB.value; } catch (e) {
+        diffRight.innerHTML = '<div class="error">JSON B: Invalid — ' + esc(e.message) + '</div>';
+        diffLeft.innerHTML = ''; summaryBar.style.display = 'none'; noDiff.style.display = 'none'; return;
+      }
+
+      overlay.classList.add('active');
+      overlayText.textContent = 'Comparing...';
+      const t0 = performance.now();
+
+      const opts = parseOptions();
+      worker.onmessage = function (e) {
+        overlay.classList.remove('active');
+        const res = e.data;
+        if (res.error) {
+          diffLeft.innerHTML = '<div class="error">' + esc(res.error) + '</div>';
+          diffRight.innerHTML = ''; return;
+        }
+
+        lineMapA = res.lineMapA;
+        lineMapB = res.lineMapB;
+        jsonA.value = res.ppTextA;
+        jsonB.value = res.ppTextB;
+
+        allDiffs = res.diffs;
+        diffData = res.diffs;
+        activeIdx = -1;
+        exportBtn.disabled = (diffData.length === 0);
+
+        renderStats(res.stats);
+
+        if (diffData.length === 0) {
+          diffLeft.innerHTML = ''; diffRight.innerHTML = '';
+          summaryBar.style.display = 'none';
+          noDiff.style.display = 'block'; noDiff.textContent = 'No differences found.';
+          showCodeViews(res.ppTextA, res.ppTextB, [], []);
+          return;
+        }
+        noDiff.style.display = 'none';
+        const addedN = diffData.filter(d => d.type === 'added').length;
+        const removedN = diffData.filter(d => d.type === 'removed').length;
+        const changedN = diffData.filter(d => d.type === 'changed').length;
+        summaryBar.style.display = 'block';
+        summaryBar.textContent = diffData.length + ' difference(s) — removed: ' + removedN + ', added: ' + addedN + ', changed: ' + changedN + '  (' + res.elapsed + 'ms)';
+
+        const pathsA = [], pathsB = [];
+        for (const d of diffData) {
+          const p = d.path || '(root)';
+          if (d.type === 'removed') pathsA.push(p);
+          else if (d.type === 'added') pathsB.push(p);
+          else { pathsA.push(p); pathsB.push(p); }
+        }
+
+        diffContainer.scrollTop = 0;
+        renderDiffViewport();
+        showCodeViews(res.ppTextA, res.ppTextB, pathsA, pathsB);
+      };
+
+      worker.postMessage({ jsonStrA: rawA, jsonStrB: rawB, opts });
+    }
+
+    /* ─── buttons ─── */
+    $('compareBtn').addEventListener('click', () => { switchToEdit('both'); requestAnimationFrame(runDiff); });
+    $('clearBtn').addEventListener('click', () => {
+      switchToEdit('both');
+      jsonA.value = ''; jsonB.value = ''; ignoreKeysInput.value = '';
+      diffLeft.innerHTML = ''; diffRight.innerHTML = '';
+      diffData = []; activeIdx = -1; exportBtn.disabled = true;
+      summaryBar.style.display = 'none'; noDiff.style.display = 'block';
+      noDiff.textContent = 'Click Compare to see differences.';
+      statsTable.style.display = 'none'; statsEmpty.style.display = 'block';
+      statsEmpty.textContent = 'Click Compare to see key frequency.';
+    });
+
+    /* ─── file loading ─── */
+    $('loadFileA').addEventListener('click', () => { loadTarget = 'A'; fileInput.click(); });
+    $('loadFileB').addEventListener('click', () => { loadTarget = 'B'; fileInput.click(); });
+    fileInput.addEventListener('change', () => {
+      const f = fileInput.files[0]; if (!f) return;
+      const r = new FileReader();
+      r.onload = () => { try { JSON.parse(r.result); if (loadTarget === 'A') jsonA.value = r.result; else jsonB.value = r.result; } catch (e) { alert('Invalid JSON: ' + e.message); } fileInput.value = ''; };
+      r.readAsText(f);
+    });
+
+    /* ─── drag & drop ─── */
+    function setJsonFromText(target, text) { try { JSON.parse(text); if (target === 'A') jsonA.value = text; else jsonB.value = text; } catch (e) { alert('Invalid JSON: ' + e.message); } }
+    function setupDropZone(panel, target) {
+      panel.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; panel.classList.add('drag-over'); });
+      panel.addEventListener('dragleave', (e) => { if (!panel.contains(e.relatedTarget)) panel.classList.remove('drag-over'); });
+      panel.addEventListener('drop', (e) => {
+        e.preventDefault(); panel.classList.remove('drag-over');
+        const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.json') || f.type === 'application/json');
+        if (!files.length) return;
+        if (files.length === 1) files[0].text().then(setJsonFromText.bind(null, target));
+        else files[0].text().then(t1 => { setJsonFromText('A', t1); files[1].text().then(t2 => setJsonFromText('B', t2)); });
+      });
+    }
+    setupDropZone($('panelA'), 'A'); setupDropZone($('panelB'), 'B');
+
+    /* ─── export ─── */
+    const exportBtn = $('exportBtn'), exportMenu = $('exportMenu');
+    exportBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      exportMenu.classList.toggle('open');
+    });
+    document.addEventListener('click', (e) => {
+      if (!exportMenu.contains(e.target) && e.target !== exportBtn) exportMenu.classList.remove('open');
+    });
+
+    function downloadFile(name, content, mime) {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function exportJSON() {
+      const out = {
+        summary: {
+          total: diffData.length,
+          added: diffData.filter(d => d.type === 'added').length,
+          removed: diffData.filter(d => d.type === 'removed').length,
+          changed: diffData.filter(d => d.type === 'changed').length
+        },
+        differences: diffData.map(d => {
+          const entry = { type: d.type, path: d.path };
+          if (d.type === 'changed') { entry.left = d.left; entry.right = d.right; }
+          else { entry.value = d.value; }
+          return entry;
+        })
+      };
+      downloadFile('diff-export.json', JSON.stringify(out, null, 2), 'application/json');
+    }
+
+    function exportCSV() {
+      const escCSV = (v) => {
+        const s = String(v == null ? '' : typeof v === 'object' ? JSON.stringify(v) : v);
+        return s.includes(',') || s.includes('"') || s.includes('\n') ? '"' + s.replace(/"/g, '""') + '"' : s;
+      };
+      let csv = 'Type,Path,Left Value,Right Value\n';
+      for (const d of diffData) {
+        const left = d.type === 'changed' ? d.left : d.type === 'removed' ? d.value : '';
+        const right = d.type === 'changed' ? d.right : d.type === 'added' ? d.value : '';
+        csv += escCSV(d.type) + ',' + escCSV(d.path) + ',' + escCSV(left) + ',' + escCSV(right) + '\n';
+      }
+      downloadFile('diff-export.csv', csv, 'text/csv');
+    }
+
+    function exportText() {
+      const lines = [];
+      const addedN = diffData.filter(d => d.type === 'added').length;
+      const removedN = diffData.filter(d => d.type === 'removed').length;
+      const changedN = diffData.filter(d => d.type === 'changed').length;
+      lines.push('JSON Diff Report');
+      lines.push('================');
+      lines.push('Total differences: ' + diffData.length);
+      lines.push('  Added:   ' + addedN);
+      lines.push('  Removed: ' + removedN);
+      lines.push('  Changed: ' + changedN);
+      lines.push('');
+      if (removedN) {
+        lines.push('--- Removed (in A, not in B) ---');
+        for (const d of diffData) { if (d.type === 'removed') lines.push('  [-] ' + d.path + ' = ' + JSON.stringify(d.value)); }
+        lines.push('');
+      }
+      if (addedN) {
+        lines.push('+++ Added (in B, not in A) +++');
+        for (const d of diffData) { if (d.type === 'added') lines.push('  [+] ' + d.path + ' = ' + JSON.stringify(d.value)); }
+        lines.push('');
+      }
+      if (changedN) {
+        lines.push('~~~ Changed ~~~');
+        for (const d of diffData) { if (d.type === 'changed') lines.push('  [~] ' + d.path + '\n        A: ' + JSON.stringify(d.left) + '\n        B: ' + JSON.stringify(d.right)); }
+        lines.push('');
+      }
+      downloadFile('diff-export.txt', lines.join('\n'), 'text/plain');
+    }
+
+    exportMenu.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-fmt]');
+      if (!btn) return;
+      exportMenu.classList.remove('open');
+      const fmt = btn.dataset.fmt;
+      if (fmt === 'json') exportJSON();
+      else if (fmt === 'csv') exportCSV();
+      else if (fmt === 'text') exportText();
+    });
+
+    /* ─── native app file injection ─── */
+    if (window.__droppedFileContents) {
+      const [a, b] = window.__droppedFileContents;
+      if (a != null) jsonA.value = a; if (b != null) jsonB.value = b;
+      delete window.__droppedFileContents;
+    }
+  })();
+
+  /* ═══════════════════════════════════════════════════════════
+     TOOL NAVIGATION + SCHEMA VALIDATOR + JSON FORMATTER
+     ═══════════════════════════════════════════════════════════ */
+  (function () {
+    'use strict';
+    const $ = (id) => document.getElementById(id);
+
+    /* ─── Tool Navigation ─── */
+    document.querySelectorAll('.tool-nav-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tool-nav-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tool-view').forEach(v => v.classList.remove('active'));
+        btn.classList.add('active');
+        const tool = btn.dataset.tool;
+        const id = 'tool' + tool.charAt(0).toUpperCase() + tool.slice(1);
+        $(id).classList.add('active');
+      });
+    });
+
+    /* ═══════════════════════════════════════
+       JSON SCHEMA VALIDATOR (draft-07 subset)
+       ═══════════════════════════════════════ */
+
+    function resolveRef(ref, root) {
+      if (typeof ref !== 'string' || !ref.startsWith('#')) return null;
+      if (ref === '#') return root;
+      if (!ref.startsWith('#/')) return null;
+      const parts = ref.slice(2).split('/');
+      let node = root;
+      for (const p of parts) {
+        const key = p.replace(/~1/g, '/').replace(/~0/g, '~');
+        if (node == null || typeof node !== 'object') return null;
+        node = node[key];
+      }
+      return node !== undefined ? node : null;
+    }
+
+    function getType(val) {
+      if (val === null) return 'null';
+      if (Array.isArray(val)) return 'array';
+      return typeof val;
+    }
+
+    function validateFormat(value, format, path, errors) {
+      const fmts = {
+        email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+        'date-time': /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/,
+        date: /^\d{4}-\d{2}-\d{2}$/,
+        time: /^\d{2}:\d{2}:\d{2}/,
+        uri: /^[a-zA-Z][a-zA-Z0-9+\-.]*:\/\//,
+        ipv4: /^(\d{1,3}\.){3}\d{1,3}$/,
+        ipv6: /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$/,
+        uuid: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+        hostname: /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/,
+      };
+      if (fmts[format] && !fmts[format].test(value)) {
+        errors.push({ path, message: 'Invalid format: expected "' + format + '"' });
+      }
+    }
+
+    function validate(instance, schema, root, path, errors, seen) {
+      if (!schema || typeof schema !== 'object') return;
+      if (schema === true) return;
+      if (schema === false) { errors.push({ path: path || '(root)', message: 'Value is not allowed here' }); return; }
+
+      /* circular $ref guard */
+      if (!seen) seen = new Set();
+
+      /* $ref */
+      if (schema.$ref) {
+        const key = path + '|' + schema.$ref;
+        if (seen.has(key)) return;
+        seen.add(key);
+        const resolved = resolveRef(schema.$ref, root);
+        if (resolved) validate(instance, resolved, root, path, errors, seen);
+        else errors.push({ path: path || '(root)', message: 'Unresolved $ref: ' + schema.$ref });
+        return;
+      }
+
+      const dp = path || '(root)';
+
+      /* type */
+      if (schema.type) {
+        const types = Array.isArray(schema.type) ? schema.type : [schema.type];
+        const actual = getType(instance);
+        let ok = false;
+        for (const t of types) {
+          if (t === 'integer') { if (typeof instance === 'number' && Number.isInteger(instance)) ok = true; }
+          else if (t === actual) ok = true;
+        }
+        if (!ok) errors.push({ path: dp, message: 'Expected type "' + types.join(' | ') + '" but got "' + actual + '"' });
+      }
+
+      /* enum */
+      if (schema.enum) {
+        if (!schema.enum.some(e => JSON.stringify(e) === JSON.stringify(instance))) {
+          errors.push({ path: dp, message: 'Value must be one of: ' + JSON.stringify(schema.enum) });
+        }
+      }
+
+      /* const */
+      if ('const' in schema) {
+        if (JSON.stringify(instance) !== JSON.stringify(schema.const)) {
+          errors.push({ path: dp, message: 'Value must be: ' + JSON.stringify(schema.const) });
+        }
+      }
+
+      /* number constraints */
+      if (typeof instance === 'number') {
+        if ('minimum' in schema && instance < schema.minimum)
+          errors.push({ path: dp, message: 'Must be >= ' + schema.minimum + ' (got ' + instance + ')' });
+        if ('maximum' in schema && instance > schema.maximum)
+          errors.push({ path: dp, message: 'Must be <= ' + schema.maximum + ' (got ' + instance + ')' });
+        if ('exclusiveMinimum' in schema && instance <= schema.exclusiveMinimum)
+          errors.push({ path: dp, message: 'Must be > ' + schema.exclusiveMinimum });
+        if ('exclusiveMaximum' in schema && instance >= schema.exclusiveMaximum)
+          errors.push({ path: dp, message: 'Must be < ' + schema.exclusiveMaximum });
+        if ('multipleOf' in schema && (instance / schema.multipleOf) % 1 !== 0)
+          errors.push({ path: dp, message: 'Must be a multiple of ' + schema.multipleOf });
+      }
+
+      /* string constraints */
+      if (typeof instance === 'string') {
+        if ('minLength' in schema && instance.length < schema.minLength)
+          errors.push({ path: dp, message: 'Must be at least ' + schema.minLength + ' characters (got ' + instance.length + ')' });
+        if ('maxLength' in schema && instance.length > schema.maxLength)
+          errors.push({ path: dp, message: 'Must be at most ' + schema.maxLength + ' characters (got ' + instance.length + ')' });
+        if ('pattern' in schema) {
+          try { if (!new RegExp(schema.pattern).test(instance)) errors.push({ path: dp, message: 'Must match pattern: /' + schema.pattern + '/' }); }
+          catch (e) { errors.push({ path: dp, message: 'Invalid pattern: ' + schema.pattern }); }
+        }
+        if ('format' in schema) validateFormat(instance, schema.format, dp, errors);
+      }
+
+      /* array constraints */
+      if (Array.isArray(instance)) {
+        if ('minItems' in schema && instance.length < schema.minItems)
+          errors.push({ path: dp, message: 'Must have at least ' + schema.minItems + ' items (got ' + instance.length + ')' });
+        if ('maxItems' in schema && instance.length > schema.maxItems)
+          errors.push({ path: dp, message: 'Must have at most ' + schema.maxItems + ' items (got ' + instance.length + ')' });
+        if (schema.uniqueItems) {
+          const s = new Set();
+          for (let i = 0; i < instance.length; i++) {
+            const h = JSON.stringify(instance[i]);
+            if (s.has(h)) { errors.push({ path: dp + '[' + i + ']', message: 'Duplicate item found' }); break; }
+            s.add(h);
+          }
+        }
+        if (schema.items) {
+          if (Array.isArray(schema.items)) {
+            for (let i = 0; i < instance.length; i++) {
+              if (i < schema.items.length) validate(instance[i], schema.items[i], root, dp + '[' + i + ']', errors, seen);
+              else if (schema.additionalItems === false) errors.push({ path: dp + '[' + i + ']', message: 'Additional items not allowed' });
+              else if (typeof schema.additionalItems === 'object') validate(instance[i], schema.additionalItems, root, dp + '[' + i + ']', errors, seen);
+            }
+          } else {
+            for (let i = 0; i < instance.length; i++) {
+              validate(instance[i], schema.items, root, dp + '[' + i + ']', errors, seen);
+            }
+          }
+        }
+        if (schema.contains) {
+          const ok = instance.some((item, i) => { const tmp = []; validate(item, schema.contains, root, dp + '[' + i + ']', tmp, seen); return tmp.length === 0; });
+          if (!ok) errors.push({ path: dp, message: 'Array must contain at least one matching item' });
+        }
+      }
+
+      /* object constraints */
+      if (typeof instance === 'object' && instance !== null && !Array.isArray(instance)) {
+        const keys = Object.keys(instance);
+        if ('minProperties' in schema && keys.length < schema.minProperties)
+          errors.push({ path: dp, message: 'Must have at least ' + schema.minProperties + ' properties (got ' + keys.length + ')' });
+        if ('maxProperties' in schema && keys.length > schema.maxProperties)
+          errors.push({ path: dp, message: 'Must have at most ' + schema.maxProperties + ' properties (got ' + keys.length + ')' });
+
+        if (schema.required) {
+          for (const r of schema.required) {
+            if (!(r in instance)) errors.push({ path: path ? path + '.' + r : r, message: 'Required property is missing' });
+          }
+        }
+
+        const validated = new Set();
+        if (schema.properties) {
+          for (const k of Object.keys(schema.properties)) {
+            if (k in instance) {
+              validate(instance[k], schema.properties[k], root, path ? path + '.' + k : k, errors, seen);
+              validated.add(k);
+            }
+          }
+        }
+        if (schema.patternProperties) {
+          for (const pat of Object.keys(schema.patternProperties)) {
+            try {
+              const re = new RegExp(pat);
+              for (const k of keys) {
+                if (re.test(k)) {
+                  validate(instance[k], schema.patternProperties[pat], root, path ? path + '.' + k : k, errors, seen);
+                  validated.add(k);
+                }
+              }
+            } catch (e) { /* invalid pattern, skip */ }
+          }
+        }
+        if (schema.additionalProperties !== undefined) {
+          for (const k of keys) {
+            if (!validated.has(k) && !(schema.properties && k in schema.properties)) {
+              if (schema.additionalProperties === false) {
+                errors.push({ path: path ? path + '.' + k : k, message: 'Additional property "' + k + '" is not allowed' });
+              } else if (typeof schema.additionalProperties === 'object') {
+                validate(instance[k], schema.additionalProperties, root, path ? path + '.' + k : k, errors, seen);
+              }
+            }
+          }
+        }
+        if (schema.dependencies) {
+          for (const [key, dep] of Object.entries(schema.dependencies)) {
+            if (key in instance) {
+              if (Array.isArray(dep)) {
+                for (const d of dep) {
+                  if (!(d in instance)) errors.push({ path: dp, message: 'Property "' + key + '" requires "' + d + '" to be present' });
+                }
+              } else {
+                validate(instance, dep, root, path, errors, seen);
+              }
+            }
+          }
+        }
+        if (schema.propertyNames) {
+          for (const k of keys) {
+            const tmp = [];
+            validate(k, schema.propertyNames, root, path ? path + '.' + k : k, tmp, seen);
+            if (tmp.length) errors.push({ path: path ? path + '.' + k : k, message: 'Property name "' + k + '" is invalid' });
+          }
+        }
+      }
+
+      /* combinators */
+      if (schema.allOf) {
+        for (const sub of schema.allOf) validate(instance, sub, root, path, errors, seen);
+      }
+      if (schema.anyOf) {
+        const ok = schema.anyOf.some(sub => { const tmp = []; validate(instance, sub, root, path, tmp, seen); return tmp.length === 0; });
+        if (!ok) errors.push({ path: dp, message: 'Does not match any of the "anyOf" schemas' });
+      }
+      if (schema.oneOf) {
+        const matches = schema.oneOf.filter(sub => { const tmp = []; validate(instance, sub, root, path, tmp, seen); return tmp.length === 0; });
+        if (matches.length !== 1) errors.push({ path: dp, message: 'Must match exactly one "oneOf" schema (matched ' + matches.length + ')' });
+      }
+      if (schema.not) {
+        const tmp = [];
+        validate(instance, schema.not, root, path, tmp, seen);
+        if (tmp.length === 0) errors.push({ path: dp, message: 'Must NOT match the "not" schema' });
+      }
+
+      /* if / then / else */
+      if (schema.if) {
+        const tmp = [];
+        validate(instance, schema.if, root, path, tmp, seen);
+        if (tmp.length === 0) { if (schema.then) validate(instance, schema.then, root, path, errors, seen); }
+        else { if (schema.else) validate(instance, schema.else, root, path, errors, seen); }
+      }
+    }
+
+    /* ─── Validator UI ─── */
+    const vDoc = $('vJsonDoc'), vSchema = $('vJsonSchema');
+    const vResultsBody = $('vResultsBody'), vEmpty = $('vEmpty');
+    const vFileInput = $('vFileInput');
+    let vLoadTarget = null;
+
+    function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+    $('validateBtn').addEventListener('click', () => {
+      let doc, schema;
+      try { doc = JSON.parse(vDoc.value || 'null'); } catch (e) {
+        vResultsBody.innerHTML = '<div class="v-result-item"><span class="v-msg">Invalid JSON document: ' + esc(e.message) + '</span></div>';
+        vEmpty.style.display = 'none'; return;
+      }
+      try { schema = JSON.parse(vSchema.value || '{}'); } catch (e) {
+        vResultsBody.innerHTML = '<div class="v-result-item"><span class="v-msg">Invalid JSON Schema: ' + esc(e.message) + '</span></div>';
+        vEmpty.style.display = 'none'; return;
+      }
+      const errors = [];
+      validate(doc, schema, schema, '', errors);
+      vEmpty.style.display = 'none';
+      if (errors.length === 0) {
+        vResultsBody.innerHTML = '<div class="v-valid">&#10003; Document is valid against the schema.</div>';
+      } else {
+        let html = '<div class="v-error-count">' + errors.length + ' validation error(s) found</div>';
+        for (let i = 0; i < errors.length; i++) {
+          html += '<div class="v-result-item">'
+            + '<span class="v-idx">' + (i + 1) + '.</span>'
+            + '<span class="v-path">' + esc(errors[i].path) + '</span>'
+            + '<span class="v-msg">' + esc(errors[i].message) + '</span>'
+            + '</div>';
+        }
+        vResultsBody.innerHTML = html;
+      }
+    });
+
+    $('vClearBtn').addEventListener('click', () => {
+      vDoc.value = ''; vSchema.value = '';
+      vResultsBody.innerHTML = '';
+      vEmpty.style.display = 'block';
+      vEmpty.textContent = 'Click Validate to check the JSON document against the schema.';
+    });
+
+    $('vLoadDoc').addEventListener('click', () => { vLoadTarget = 'doc'; vFileInput.click(); });
+    $('vLoadSchema').addEventListener('click', () => { vLoadTarget = 'schema'; vFileInput.click(); });
+    vFileInput.addEventListener('change', () => {
+      const f = vFileInput.files[0]; if (!f) return;
+      const r = new FileReader();
+      r.onload = () => {
+        try { JSON.parse(r.result); } catch (e) { alert('Invalid JSON: ' + e.message); vFileInput.value = ''; return; }
+        if (vLoadTarget === 'doc') vDoc.value = r.result; else vSchema.value = r.result;
+        vFileInput.value = '';
+      };
+      r.readAsText(f);
+    });
+
+    $('vLoadSample').addEventListener('click', () => {
+      vSchema.value = JSON.stringify({
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "age": { "type": "integer", "minimum": 0, "maximum": 150 },
+          "email": { "type": "string", "format": "email" },
+          "tags": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+          "address": {
+            "type": "object",
+            "properties": {
+              "street": { "type": "string" },
+              "city": { "type": "string" },
+              "zip": { "type": "string", "pattern": "^\\d{5}(-\\d{4})?$" }
+            },
+            "required": ["street", "city"]
+          }
+        },
+        "required": ["name", "email"],
+        "additionalProperties": false
+      }, null, 2);
+      vDoc.value = JSON.stringify({
+        "name": "Alice",
+        "age": 30,
+        "email": "alice@example.com",
+        "tags": ["admin", "user"],
+        "address": { "street": "123 Main St", "city": "Springfield", "zip": "62704" }
+      }, null, 2);
+    });
+
+    /* ─── drag & drop for validator ─── */
+    function setupVDrop(panel, target) {
+      panel.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; panel.classList.add('drag-over'); });
+      panel.addEventListener('dragleave', (e) => { if (!panel.contains(e.relatedTarget)) panel.classList.remove('drag-over'); });
+      panel.addEventListener('drop', (e) => {
+        e.preventDefault(); panel.classList.remove('drag-over');
+        const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.json') || f.type === 'application/json');
+        if (!files.length) return;
+        files[0].text().then(t => {
+          try { JSON.parse(t); } catch (err) { alert('Invalid JSON: ' + err.message); return; }
+          if (target === 'doc') vDoc.value = t; else vSchema.value = t;
+        });
+      });
+    }
+    setupVDrop(vDoc.closest('.panel'), 'doc');
+    setupVDrop(vSchema.closest('.panel'), 'schema');
+
+    /* ═══════════════════════════════════════
+       JSON FORMATTER / PRETTY PRINTER
+       ═══════════════════════════════════════ */
+
+    const fInput = $('fInput'), fOutput = $('fOutput'), fStats = $('fStats');
+    const fIndent = $('fIndent'), fSortKeys = $('fSortKeys'), fMinify = $('fMinify');
+    const fFileInput = $('fFileInput');
+
+    function sortKeysDeep(obj) {
+      if (obj === null || typeof obj !== 'object') return obj;
+      if (Array.isArray(obj)) return obj.map(sortKeysDeep);
+      const sorted = {};
+      for (const key of Object.keys(obj).sort()) sorted[key] = sortKeysDeep(obj[key]);
+      return sorted;
+    }
+
+    function countNodes(obj) {
+      if (obj === null || typeof obj !== 'object') return 1;
+      if (Array.isArray(obj)) return 1 + obj.reduce((s, v) => s + countNodes(v), 0);
+      return 1 + Object.values(obj).reduce((s, v) => s + countNodes(v), 0);
+    }
+
+    function maxDepth(obj, d) {
+      if (!d) d = 0;
+      if (obj === null || typeof obj !== 'object') return d;
+      if (Array.isArray(obj)) return obj.length === 0 ? d : Math.max(...obj.map(v => maxDepth(v, d + 1)));
+      const vals = Object.values(obj);
+      return vals.length === 0 ? d : Math.max(...vals.map(v => maxDepth(v, d + 1)));
+    }
+
+    $('formatBtn').addEventListener('click', () => {
+      let obj;
+      try { obj = JSON.parse(fInput.value || 'null'); } catch (e) {
+        fOutput.value = 'Error: ' + e.message;
+        fStats.textContent = '';
+        return;
+      }
+      if (fSortKeys.checked) obj = sortKeysDeep(obj);
+
+      let result;
+      if (fMinify.checked) {
+        result = JSON.stringify(obj);
+      } else {
+        const indent = fIndent.value === 'tab' ? '\t' : parseInt(fIndent.value);
+        result = JSON.stringify(obj, null, indent);
+      }
+      fOutput.value = result;
+
+      const lines = result.split('\n').length;
+      const bytes = new Blob([result]).size;
+      const nodes = countNodes(obj);
+      const depth = maxDepth(obj);
+      const sizeStr = bytes < 1024 ? bytes + ' B' : (bytes / 1024).toFixed(1) + ' KB';
+      fStats.textContent = lines + ' lines \u00B7 ' + sizeStr + ' \u00B7 ' + nodes + ' nodes \u00B7 depth ' + depth;
+    });
+
+    $('fClearBtn').addEventListener('click', () => {
+      fInput.value = ''; fOutput.value = ''; fStats.textContent = '';
+    });
+
+    $('fCopyBtn').addEventListener('click', () => {
+      if (!fOutput.value) return;
+      navigator.clipboard.writeText(fOutput.value).then(() => {
+        const btn = $('fCopyBtn');
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+      });
+    });
+
+    $('fLoadFile').addEventListener('click', () => { fFileInput.click(); });
+    fFileInput.addEventListener('change', () => {
+      const f = fFileInput.files[0]; if (!f) return;
+      const r = new FileReader();
+      r.onload = () => { fInput.value = r.result; fFileInput.value = ''; };
+      r.readAsText(f);
+    });
+
+    /* drag & drop for formatter */
+    const fPanel = fInput.closest('.panel');
+    fPanel.addEventListener('dragover', (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; fPanel.classList.add('drag-over'); });
+    fPanel.addEventListener('dragleave', (e) => { if (!fPanel.contains(e.relatedTarget)) fPanel.classList.remove('drag-over'); });
+    fPanel.addEventListener('drop', (e) => {
+      e.preventDefault(); fPanel.classList.remove('drag-over');
+      const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.json') || f.type === 'application/json');
+      if (files.length) files[0].text().then(t => { fInput.value = t; });
+    });
+
+    /* auto-format on indent/sort/minify change if output already exists */
+    [fIndent, fSortKeys, fMinify].forEach(el => {
+      el.addEventListener('change', () => {
+        if (fOutput.value && fInput.value) $('formatBtn').click();
+      });
+    });
+
+  })();
+  </script>
+</body>
+</html>
